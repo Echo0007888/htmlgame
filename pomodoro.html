@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>番茄钟 - Pomodoro Timer</title>
+<style>
+:root {
+  --bg: #f5f0eb;
+  --surface: #ffffff;
+  --text: #2c2416;
+  --text-secondary: #6b5e4a;
+  --border: #e0d5c1;
+  --shadow: 0 2px 12px rgba(0,0,0,0.06);
+  --focus: #d9534f;
+  --focus-light: #fdf0ef;
+  --short: #5cb85c;
+  --short-light: #edf7ed;
+  --long: #337ab7;
+  --long-light: #ebf4fa;
+  --radius: 16px;
+  --transition: 0.25s ease;
+}
+.dark {
+  --bg: #1a1a2e;
+  --surface: #252540;
+  --text: #e8e4d9;
+  --text-secondary: #a09b8c;
+  --border: #3a3550;
+  --shadow: 0 2px 12px rgba(0,0,0,0.25);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 24px 16px 48px;
+  transition: background var(--transition), color var(--transition);
+}
+.container { width: 100%; max-width: 460px; display:flex; flex-direction:column; gap:20px; }
+
+/* Header */
+.header { display:flex; align-items:center; justify-content:space-between; }
+.header h1 { font-size:1.5rem; font-weight:700; letter-spacing:-0.02em; }
+.header-actions { display:flex; gap:8px; }
+.icon-btn {
+  width:38px; height:38px; border-radius:50%; border:1.5px solid var(--border);
+  background:var(--surface); color:var(--text); cursor:pointer; font-size:1.1rem;
+  display:flex; align-items:center; justify-content:center;
+  transition: all var(--transition); box-shadow:var(--shadow);
+}
+.icon-btn:hover { transform:translateY(-1px); box-shadow:0 4px 16px rgba(0,0,0,0.1); }
+.icon-btn:active { transform:scale(0.95); }
+
+/* Card */
+.card {
+  background:var(--surface); border-radius:var(--radius); padding:24px;
+  box-shadow:var(--shadow); border:1px solid var(--border);
+  transition: background var(--transition), border var(--transition);
+}
+
+/* Timer Circle */
+.timer-section { display:flex; flex-direction:column; align-items:center; gap:14px; }
+.timer-wrapper { position:relative; width:260px; height:260px; }
+.timer-svg { transform:rotate(-90deg); width:100%; height:100%; }
+.timer-bg { fill:none; stroke:var(--border); stroke-width:6; }
+.timer-progress {
+  fill:none; stroke:var(--focus); stroke-width:6; stroke-linecap:round;
+  transition: stroke-dashoffset 0.3s linear, stroke var(--transition);
+}
+.timer-progress.countup {
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+@keyframes pulse-ring {
+  0%,100% { opacity:1; }
+  50% { opacity:0.5; }
+}
+.timer-text {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:4px;
+}
+.timer-time { font-size:3.2rem; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
+.timer-time.countup { color:var(--short); }
+.timer-label { font-size:0.85rem; color:var(--text-secondary); font-weight:500; }
+.timer-type-indicator {
+  font-size:0.7rem; font-weight:600; padding:2px 8px; border-radius:6px;
+  background:var(--bg); color:var(--text-secondary);
+}
+
+/* Timer Type Toggle */
+.timer-type-toggle { display:flex; gap:4px; background:var(--bg); border-radius:10px; padding:3px; width:100%; }
+.timer-type-btn {
+  flex:1; padding:8px 4px; border:none; border-radius:8px; cursor:pointer;
+  font-size:0.8rem; font-weight:600; text-align:center;
+  background:transparent; color:var(--text-secondary);
+  transition: all var(--transition);
+}
+.timer-type-btn.active { background:var(--surface); color:var(--text); box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+.timer-type-btn.countup-active.active { color:var(--short); }
+
+/* Mode Tabs */
+.mode-tabs { display:flex; gap:4px; background:var(--bg); border-radius:12px; padding:4px; width:100%; }
+.mode-tab {
+  flex:1; padding:10px 4px; border:none; border-radius:10px; cursor:pointer;
+  font-size:0.82rem; font-weight:600; text-align:center;
+  background:transparent; color:var(--text-secondary);
+  transition: all var(--transition); white-space:nowrap;
+}
+.mode-tab.active { background:var(--surface); color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+.mode-tab.focus.active { color:var(--focus); }
+.mode-tab.short.active { color:var(--short); }
+.mode-tab.long.active { color:var(--long); }
+
+/* Custom Duration Row */
+.custom-dur-row {
+  display:flex; align-items:center; gap:8px; width:100%;
+  padding:6px 0; justify-content:center;
+}
+.custom-dur-label { font-size:0.8rem; color:var(--text-secondary); font-weight:500; white-space:nowrap; }
+.custom-dur-input {
+  width:72px; padding:8px 10px; border:1.5px solid var(--border); border-radius:10px;
+  text-align:center; font-size:0.9rem; background:var(--bg); color:var(--text);
+  outline:none; transition:border-color var(--transition);
+}
+.custom-dur-input:focus { border-color:var(--focus); }
+.custom-dur-unit { font-size:0.78rem; color:var(--text-secondary); }
+.custom-dur-apply {
+  padding:8px 14px; border:none; border-radius:10px; cursor:pointer;
+  font-size:0.8rem; font-weight:600; background:var(--focus); color:#fff;
+  transition:all var(--transition); white-space:nowrap;
+}
+.custom-dur-apply:active { transform:scale(0.96); }
+.custom-dur-apply.applied { background:var(--short); }
+.custom-dur-badge {
+  font-size:0.72rem; color:var(--short); font-weight:600;
+  margin-left:4px;
+}
+
+/* Controls */
+.controls { display:flex; align-items:center; justify-content:center; gap:16px; }
+.btn {
+  padding:12px 32px; border:none; border-radius:28px; cursor:pointer;
+  font-size:1rem; font-weight:600; transition: all var(--transition);
+  display:flex; align-items:center; gap:8px;
+}
+.btn:active { transform:scale(0.96); }
+.btn-start {
+  background:var(--focus); color:#fff; font-size:1.1rem;
+  padding:14px 40px; box-shadow:0 4px 16px rgba(217,83,79,0.3);
+}
+.btn-start:hover { box-shadow:0 6px 20px rgba(217,83,79,0.4); transform:translateY(-1px); }
+.btn-start.running { background:#f0ad4e; box-shadow:0 4px 16px rgba(240,173,78,0.3); }
+.btn-start.countup-running { background:var(--short); box-shadow:0 4px 16px rgba(92,184,92,0.3); }
+.btn-reset {
+  background:var(--surface); color:var(--text-secondary); border:1.5px solid var(--border);
+  padding:10px 20px; font-size:0.9rem;
+}
+.btn-reset:hover { background:var(--bg); }
+
+/* Task Input */
+.task-row { display:flex; gap:8px; }
+.task-input {
+  flex:1; padding:12px 16px; border:1.5px solid var(--border); border-radius:12px;
+  font-size:0.95rem; background:var(--bg); color:var(--text);
+  transition: all var(--transition); outline:none;
+}
+.task-input:focus { border-color:var(--focus); box-shadow:0 0 0 3px rgba(217,83,79,0.1); }
+.task-bind-btn {
+  padding:10px 18px; border:none; border-radius:12px; cursor:pointer;
+  font-size:0.85rem; font-weight:600; background:var(--focus);
+  color:#fff; transition: all var(--transition); white-space:nowrap;
+}
+.task-bind-btn.bound { background:var(--short); }
+.task-bind-btn:active { transform:scale(0.96); }
+.task-bound-badge {
+  font-size:0.78rem; color:var(--short); font-weight:600;
+  display:flex; align-items:center; gap:4px;
+}
+
+/* Stats */
+.stats-row { display:flex; gap:12px; }
+.stat-card {
+  flex:1; background:var(--surface); border-radius:var(--radius); padding:16px;
+  text-align:center; box-shadow:var(--shadow); border:1px solid var(--border);
+}
+.stat-value { font-size:1.6rem; font-weight:700; }
+.stat-label { font-size:0.75rem; color:var(--text-secondary); margin-top:2px; }
+
+/* Sections */
+.section-header {
+  display:flex; align-items:center; justify-content:space-between;
+  cursor:pointer; user-select:none; padding:4px 0;
+}
+.section-header h3 { font-size:1rem; font-weight:600; }
+.section-toggle { font-size:0.8rem; color:var(--text-secondary); transition:transform var(--transition); }
+.section-toggle.open { transform:rotate(180deg); }
+.section-body { margin-top:16px; }
+.section-body.hidden { display:none; }
+
+/* Settings */
+.setting-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 0; border-bottom:1px solid var(--border);
+}
+.setting-row:last-child { border-bottom:none; }
+.setting-label { font-size:0.9rem; font-weight:500; }
+.setting-desc { font-size:0.78rem; color:var(--text-secondary); }
+.setting-control { display:flex; align-items:center; gap:8px; }
+.duration-input {
+  width:64px; padding:6px 8px; border:1.5px solid var(--border); border-radius:8px;
+  text-align:center; font-size:0.9rem; background:var(--bg); color:var(--text);
+  outline:none; transition:border-color var(--transition);
+}
+.duration-input:focus { border-color:var(--focus); }
+.duration-unit { font-size:0.8rem; color:var(--text-secondary); }
+.toggle-switch {
+  width:48px; height:28px; border-radius:14px; cursor:pointer;
+  background:var(--border); position:relative; transition:background var(--transition);
+  border:none; padding:0;
+}
+.toggle-switch.on { background:var(--focus); }
+.toggle-switch::after {
+  content:''; position:absolute; top:3px; left:3px; width:22px; height:22px;
+  border-radius:50%; background:#fff; transition:transform var(--transition);
+}
+.toggle-switch.on::after { transform:translateX(20px); }
+
+/* History */
+.history-list { display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto; }
+.history-item {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; background:var(--bg); border-radius:10px; gap:8px;
+}
+.history-info { flex:1; min-width:0; }
+.history-task { font-weight:600; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.history-meta { font-size:0.78rem; color:var(--text-secondary); }
+.history-delete {
+  width:30px; height:30px; border-radius:50%; border:none; cursor:pointer;
+  background:transparent; color:var(--text-secondary); font-size:1rem;
+  display:flex; align-items:center; justify-content:center;
+  transition:all var(--transition); flex-shrink:0;
+}
+.history-delete:hover { background:rgba(217,83,79,0.1); color:var(--focus); }
+.history-empty { text-align:center; color:var(--text-secondary); font-size:0.9rem; padding:20px 0; }
+.clear-all-btn {
+  font-size:0.8rem; color:var(--focus); background:none; border:none;
+  cursor:pointer; padding:4px 8px; border-radius:6px; font-weight:500;
+}
+.clear-all-btn:hover { background:rgba(217,83,79,0.08); }
+
+/* Summary */
+.summary-card { padding:20px 24px; }
+.summary-title { font-size:0.9rem; font-weight:600; margin-bottom:14px; display:flex; align-items:center; gap:6px; }
+.summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.summary-item {
+  background:var(--bg); border-radius:12px; padding:14px 16px; text-align:center;
+}
+.summary-item .val { font-size:1.5rem; font-weight:700; }
+.summary-item .lbl { font-size:0.75rem; color:var(--text-secondary); margin-top:2px; }
+.summary-item .sub { font-size:0.7rem; color:var(--text-secondary); }
+
+/* Notification toast */
+.toast {
+  position:fixed; top:24px; left:50%; transform:translateX(-50%);
+  background:var(--surface); color:var(--text); padding:14px 24px;
+  border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.15);
+  font-weight:600; z-index:1000; animation:toastIn 0.3s ease;
+  border:1px solid var(--border);
+}
+@keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(-12px);} to{opacity:1;transform:translateX(-50%) translateY(0);} }
+
+/* Motivational Quote */
+.motivational-overlay {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:var(--surface); color:var(--text);
+  padding:20px 32px; border-radius:16px; z-index:999;
+  box-shadow:0 12px 40px rgba(0,0,0,0.2); border:1px solid var(--border);
+  font-size:1.1rem; font-weight:600; text-align:center;
+  animation:quoteIn 0.4s ease, quoteOut 0.4s ease 2.6s forwards;
+  pointer-events:none; max-width:90vw;
+}
+.motivational-overlay .quote-emoji { font-size:1.5rem; display:block; margin-bottom:6px; }
+@keyframes quoteIn { from{opacity:0;transform:translate(-50%,-50%) scale(0.9);} to{opacity:1;transform:translate(-50%,-50%) scale(1);} }
+@keyframes quoteOut { from{opacity:1;transform:translate(-50%,-50%) scale(1);} to{opacity:0;transform:translate(-50%,-50%) scale(0.9);} }
+
+/* Clean stats btn */
+.clear-stats-btn {
+  font-size:0.75rem; color:var(--text-secondary); background:none; border:none;
+  cursor:pointer; padding:2px 6px; border-radius:4px;
+}
+.clear-stats-btn:hover { background:var(--border); }
+
+/* Responsive */
+@media (max-width:400px) {
+  .timer-wrapper { width:220px; height:220px; }
+  .timer-time { font-size:2.6rem; }
+  .mode-tab { font-size:0.75rem; padding:8px 2px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <h1>🍅 番茄钟</h1>
+    <div class="header-actions">
+      <button class="icon-btn" id="btnDarkMode" title="切换深色/浅色模式">🌓</button>
+    </div>
+  </div>
+
+  <!-- Timer Card -->
+  <div class="card timer-section">
+    <div class="timer-wrapper">
+      <svg class="timer-svg" viewBox="0 0 260 260">
+        <circle class="timer-bg" cx="130" cy="130" r="120"/>
+        <circle class="timer-progress" id="timerCircle" cx="130" cy="130" r="120"
+          stroke-dasharray="753.98" stroke-dashoffset="0"/>
+      </svg>
+      <div class="timer-text">
+        <div class="timer-time" id="timerDisplay">40:00</div>
+        <div class="timer-label" id="timerLabel">专注 · 倒计时</div>
+        <div class="timer-type-indicator" id="timerTypeBadge">⬇ 倒计时</div>
+      </div>
+    </div>
+
+    <!-- Timer Type Toggle -->
+    <div class="timer-type-toggle" id="timerTypeToggle">
+      <button class="timer-type-btn active" data-type="countdown">⏬ 倒计时</button>
+      <button class="timer-type-btn" data-type="countup">⏫ 正计时</button>
+    </div>
+
+    <!-- Mode Tabs -->
+    <div class="mode-tabs" id="modeTabs">
+      <button class="mode-tab focus active" data-mode="focus">📖 专注</button>
+      <button class="mode-tab short" data-mode="shortBreak">☕ 短休息</button>
+      <button class="mode-tab long" data-mode="longBreak">🌿 长休息</button>
+    </div>
+
+    <!-- Custom Duration -->
+    <div class="custom-dur-row">
+      <span class="custom-dur-label">⏱ 自定义时长：</span>
+      <input type="number" class="custom-dur-input" id="customDurInput"
+        min="1" max="180" placeholder="1~180" disabled>
+      <span class="custom-dur-unit">分钟</span>
+      <button class="custom-dur-apply" id="btnCustomDurApply">应用</button>
+      <span class="custom-dur-badge hidden" id="customDurBadge">已自定义 ✓</span>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn btn-reset" id="btnReset">↺ 重置</button>
+      <button class="btn btn-start" id="btnStart">▶ 开始</button>
+    </div>
+  </div>
+
+  <!-- Task Binding -->
+  <div class="card">
+    <div class="task-row">
+      <input type="text" class="task-input" id="taskInput" placeholder="输入任务名称（可选）" maxlength="60">
+      <button class="task-bind-btn" id="btnBindTask">绑定</button>
+    </div>
+    <div class="task-bound-badge hidden" id="taskBadge" style="margin-top:8px;">
+      📌 当前任务：<span id="taskBadgeName"></span>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value" id="statFocusCount">0</div>
+      <div class="stat-label">今日专注轮数</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statFocusTime">0<span style="font-size:0.9rem;"> 分钟</span></div>
+      <div class="stat-label">累计专注时长</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statCycle">0/2</div>
+      <div class="stat-label">
+        当前循环进度
+        <button class="clear-stats-btn" id="btnClearStats" title="清空当日统计">清空</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="card summary-card">
+    <div class="summary-title">📊 专注总结</div>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="val" id="sumTodayTime">0<span style="font-size:0.9rem;"> 分钟</span></div>
+        <div class="lbl">📅 今日专注</div>
+        <div class="sub" id="sumTodayCount">0 轮</div>
+      </div>
+      <div class="summary-item">
+        <div class="val" id="sumWeekTime">0<span style="font-size:0.9rem;"> 分钟</span></div>
+        <div class="lbl">📆 本周专注</div>
+        <div class="sub" id="sumWeekCount">0 轮</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <div class="section-header" id="settingsHeader">
+      <h3>⚙️ 设置</h3>
+      <span class="section-toggle open" id="settingsToggle">▼</span>
+    </div>
+    <div class="section-body" id="settingsBody">
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">专注时长</div>
+          <div class="setting-desc">5~60 分钟</div>
+        </div>
+        <div class="setting-control">
+          <input type="number" class="duration-input" id="focusDuration" min="5" max="60" value="40">
+          <span class="duration-unit">分钟</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">短休息时长</div>
+          <div class="setting-desc">1~15 分钟</div>
+        </div>
+        <div class="setting-control">
+          <input type="number" class="duration-input" id="shortBreakDuration" min="1" max="15" value="5">
+          <span class="duration-unit">分钟</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">长休息时长</div>
+          <div class="setting-desc">5~30 分钟</div>
+        </div>
+        <div class="setting-control">
+          <input type="number" class="duration-input" id="longBreakDuration" min="5" max="30" value="15">
+          <span class="duration-unit">分钟</span>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">自动进入下一阶段</div>
+        <button class="toggle-switch on" id="toggleAutoNext"></button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">提示音</div>
+        <button class="toggle-switch on" id="toggleSound"></button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">桌面通知</div>
+        <button class="toggle-switch on" id="toggleNotification"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="card">
+    <div class="section-header" id="historyHeader">
+      <h3>📋 历史记录</h3>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="clear-all-btn hidden" id="btnClearAll">清空全部</button>
+        <span class="section-toggle open" id="historyToggle">▼</span>
+      </div>
+    </div>
+    <div class="section-body" id="historyBody">
+      <div class="history-list" id="historyList">
+        <div class="history-empty">暂无记录，完成一轮专注后自动生成</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ── Constants ──
+  const CIRCUMFERENCE = 2 * Math.PI * 120; // ~753.98
+
+  const MOTIVATIONAL_QUOTES = [
+    { emoji:'💪', text:'加油，坚持住！' },
+    { emoji:'🔥', text:'再努力一会，胜利就在前方！' },
+    { emoji:'🎯', text:'专注当下，必有收获。' },
+    { emoji:'⏳', text:'每一分钟的努力都不会白费。' },
+    { emoji:'🧱', text:'今天的付出，是明天的基石。' },
+    { emoji:'⚡', text:'保持专注，你比想象中更强大。' },
+    { emoji:'🏃', text:'学习是一场马拉松，稳扎稳打。' },
+    { emoji:'🌟', text:'别停下，离目标越来越近了！' },
+    { emoji:'🌱', text:'此刻的坚持，成就未来的你。' },
+    { emoji:'🐢', text:'一步一个脚印，慢慢来比较快。' },
+    { emoji:'🧘', text:'心无旁骛，方得始终。' },
+    { emoji:'🍀', text:'努力的人运气不会太差。' },
+    { emoji:'👏', text:'你已经很棒了，继续加油！' },
+    { emoji:'💎', text:'专注是最好的天赋。' },
+    { emoji:'🏆', text:'天道酬勤，功不唐捐。' },
+    { emoji:'📖', text:'学如逆水行舟，不进则退。' },
+    { emoji:'🌈', text:'坚持就是胜利，彩虹总在风雨后。' },
+    { emoji:'🎖', text:'今天的自己比昨天更强。' },
+    { emoji:'🔑', text:'自律是打开成功之门的钥匙。' },
+    { emoji:'🌊', text:'水滴石穿，非一日之功。' },
+  ];
+
+  // ── DOM refs ──
+  const $ = id => document.getElementById(id);
+  const timerDisplay = $('timerDisplay');
+  const timerLabel = $('timerLabel');
+  const timerCircle = $('timerCircle');
+  const timerTypeBadge = $('timerTypeBadge');
+  const btnStart = $('btnStart');
+  const btnReset = $('btnReset');
+  const btnDarkMode = $('btnDarkMode');
+  const timerTypeToggle = $('timerTypeToggle');
+  const modeTabs = $('modeTabs');
+  const customDurInput = $('customDurInput');
+  const btnCustomDurApply = $('btnCustomDurApply');
+  const customDurBadge = $('customDurBadge');
+  const taskInput = $('taskInput');
+  const btnBindTask = $('btnBindTask');
+  const taskBadge = $('taskBadge');
+  const taskBadgeName = $('taskBadgeName');
+  const statFocusCount = $('statFocusCount');
+  const statFocusTime = $('statFocusTime');
+  const statCycle = $('statCycle');
+  const historyList = $('historyList');
+  const btnClearAll = $('btnClearAll');
+  const btnClearStats = $('btnClearStats');
+  const sumTodayTime = $('sumTodayTime');
+  const sumTodayCount = $('sumTodayCount');
+  const sumWeekTime = $('sumWeekTime');
+  const sumWeekCount = $('sumWeekCount');
+
+  // Settings refs
+  const focusDurationInput = $('focusDuration');
+  const shortBreakDurationInput = $('shortBreakDuration');
+  const longBreakDurationInput = $('longBreakDuration');
+  const toggleAutoNext = $('toggleAutoNext');
+  const toggleSound = $('toggleSound');
+  const toggleNotification = $('toggleNotification');
+
+  // ── State ──
+  const state = {
+    mode: 'focus',
+    timerType: 'countdown', // 'countdown' | 'countup'
+    timeRemaining: 40 * 60,
+    sessionElapsed: 0,
+    isRunning: false,
+    focusCount: 0,
+    taskName: '',
+    customDuration: null, // number (minutes) or null
+    lastQuoteMinute: 0,
+  };
+
+  const settings = {
+    focusDuration: 40,
+    shortBreakDuration: 5,
+    longBreakDuration: 15,
+    autoNext: true,
+    sound: true,
+    desktopNotification: true,
+    darkMode: false,
+  };
+
+  let history = [];
+  let dailyStats = { date: getToday(), focusCount: 0, totalFocusMinutes: 0 };
+  let timerInterval = null;
+
+  // ── Helpers ──
+  function getToday() { return new Date().toISOString().slice(0, 10); }
+
+  function getWeekStart() {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    const mon = new Date(now);
+    mon.setDate(now.getDate() - diff);
+    return mon.toISOString().slice(0, 10);
+  }
+
+  function computeWeeklyStats() {
+    const weekStart = getWeekStart();
+    const today = getToday();
+    let minutes = 0;
+    let count = 0;
+    for (const h of history) {
+      const hDate = h.completedAt.slice(0, 10);
+      if (hDate >= weekStart && hDate <= today) { count++; minutes += h.duration; }
+    }
+    return { count, minutes };
+  }
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  function getModeDefaultDuration(mode) {
+    if (mode === 'focus') return settings.focusDuration;
+    if (mode === 'shortBreak') return settings.shortBreakDuration;
+    return settings.longBreakDuration;
+  }
+
+  function getEffectiveDuration() {
+    if (state.customDuration !== null) return state.customDuration;
+    return getModeDefaultDuration(state.mode);
+  }
+
+  function getModeLabel(mode) {
+    if (mode === 'focus') return '专注';
+    if (mode === 'shortBreak') return '短休息';
+    return '长休息';
+  }
+
+  function getModeColor(mode) {
+    if (mode === 'focus') return 'var(--focus)';
+    if (mode === 'shortBreak') return 'var(--short)';
+    return 'var(--long)';
+  }
+
+  // ── Persistence ──
+  function saveAll() {
+    localStorage.setItem('pomodoro_settings', JSON.stringify(settings));
+    localStorage.setItem('pomodoro_history', JSON.stringify(history));
+    localStorage.setItem('pomodoro_dailyStats', JSON.stringify(dailyStats));
+    localStorage.setItem('pomodoro_state', JSON.stringify({
+      mode: state.mode,
+      timerType: state.timerType,
+      timeRemaining: state.timeRemaining,
+      focusCount: state.focusCount,
+      taskName: state.taskName,
+      customDuration: state.customDuration,
+    }));
+  }
+
+  function loadAll() {
+    try {
+      const s = JSON.parse(localStorage.getItem('pomodoro_settings'));
+      if (s) Object.assign(settings, s);
+      const h = JSON.parse(localStorage.getItem('pomodoro_history'));
+      if (h) history = h;
+      const d = JSON.parse(localStorage.getItem('pomodoro_dailyStats'));
+      if (d) {
+        if (d.date !== getToday()) {
+          dailyStats = { date: getToday(), focusCount: 0, totalFocusMinutes: 0 };
+        } else {
+          dailyStats = d;
+        }
+      }
+      const st = JSON.parse(localStorage.getItem('pomodoro_state'));
+      if (st) {
+        state.mode = st.mode || 'focus';
+        state.timerType = st.timerType || 'countdown';
+        state.focusCount = st.focusCount || 0;
+        state.taskName = st.taskName || '';
+        state.customDuration = st.customDuration ?? null;
+        if (state.timerType === 'countdown') {
+          state.timeRemaining = st.timeRemaining ?? getEffectiveDuration() * 60;
+        } else {
+          state.timeRemaining = 0;
+          state.sessionElapsed = st.timeRemaining ?? 0;
+        }
+      } else {
+        state.timeRemaining = getEffectiveDuration() * 60;
+      }
+    } catch (_) { /* ignore corrupt data */ }
+  }
+
+  // ── Sound ──
+  function playSound() {
+    if (!settings.sound) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const notes = state.mode === 'focus' ? [523.25, 659.25, 783.99] : [783.99, 659.25, 523.25];
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.4);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.2);
+        osc.stop(ctx.currentTime + i * 0.2 + 0.4);
+      });
+    } catch (_) { /* audio not available */ }
+  }
+
+  function notify(title, body) {
+    if (!settings.desktopNotification) return;
+    if (Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '🍅' });
+    } else if (Notification.permission === 'default') {
+      Notification.requestPermission().then(p => { if (p === 'granted') new Notification(title, { body, icon: '🍅' }); });
+    }
+  }
+
+  function showToast(msg) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => { el.remove(); }, 2500);
+  }
+
+  // ── Motivational Quotes ──
+  function showMotivationalQuote() {
+    const idx = Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length);
+    const q = MOTIVATIONAL_QUOTES[idx];
+    const el = document.createElement('div');
+    el.className = 'motivational-overlay';
+    el.innerHTML = `<span class="quote-emoji">${q.emoji}</span>${q.text}`;
+    document.body.appendChild(el);
+    setTimeout(() => { el.remove(); }, 3200);
+  }
+
+  function checkMotivationalQuote() {
+    const elapsedMin = Math.floor(state.sessionElapsed / 60);
+    const marker = Math.floor(elapsedMin / 10) * 10; // 0, 10, 20, 30...
+    if (marker > 0 && marker > state.lastQuoteMinute) {
+      state.lastQuoteMinute = marker;
+      showMotivationalQuote();
+    }
+  }
+
+  // ── Timer Logic ──
+  function tick() {
+    state.sessionElapsed++;
+
+    if (state.timerType === 'countdown') {
+      if (state.timeRemaining <= 0) {
+        completeTimer();
+        return;
+      }
+      state.timeRemaining--;
+    } else {
+      state.timeRemaining++;
+    }
+
+    checkMotivationalQuote();
+    updateTimerUI();
+  }
+
+  function startTimer() {
+    if (state.isRunning) return;
+    state.isRunning = true;
+
+    // Reset quote tracking for new session
+    state.lastQuoteMinute = 0;
+    if (state.timerType === 'countup') {
+      state.sessionElapsed = state.timeRemaining; // carry over elapsed from previous pause
+    }
+
+    timerInterval = setInterval(tick, 1000);
+    updateTimerUI();
+    updateControlButtons();
+    updateModeTabs();
+    updateTimerTypeUI();
+    updateCustomDurUI();
+  }
+
+  function pauseTimer() {
+    state.isRunning = false;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    updateControlButtons();
+    updateModeTabs();
+    updateTimerTypeUI();
+    updateCustomDurUI();
+  }
+
+  function resetTimer() {
+    state.isRunning = false;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    state.sessionElapsed = 0;
+    state.lastQuoteMinute = 0;
+
+    if (state.timerType === 'countdown') {
+      state.timeRemaining = getEffectiveDuration() * 60;
+    } else {
+      state.timeRemaining = 0;
+    }
+
+    updateTimerUI();
+    updateControlButtons();
+    updateModeTabs();
+    updateTimerTypeUI();
+    updateCustomDurUI();
+  }
+
+  function switchMode(mode) {
+    if (state.isRunning) return;
+    state.mode = mode;
+    state.taskName = mode === 'focus' ? state.taskName : '';
+    // Clear custom duration when switching modes
+    state.customDuration = null;
+    state.sessionElapsed = 0;
+    state.lastQuoteMinute = 0;
+
+    if (state.timerType === 'countdown') {
+      state.timeRemaining = getEffectiveDuration() * 60;
+    } else {
+      state.timeRemaining = 0;
+    }
+
+    updateTimerUI();
+    updateControlButtons();
+    updateModeTabs();
+    updateTaskUI();
+    updateCustomDurUI();
+    saveAll();
+  }
+
+  function switchTimerType(type) {
+    if (state.isRunning) return;
+    state.timerType = type;
+    state.sessionElapsed = 0;
+    state.lastQuoteMinute = 0;
+
+    if (type === 'countdown') {
+      state.timeRemaining = getEffectiveDuration() * 60;
+    } else {
+      state.timeRemaining = 0;
+    }
+
+    updateTimerUI();
+    updateTimerTypeUI();
+    updateCustomDurUI();
+    saveAll();
+  }
+
+  function applyCustomDuration() {
+    if (state.isRunning) return;
+    let val = parseInt(customDurInput.value, 10);
+    if (isNaN(val) || val < 1 || val > 180) {
+      showToast('请输入 1~180 之间的数字');
+      return;
+    }
+    state.customDuration = val;
+    state.sessionElapsed = 0;
+    state.lastQuoteMinute = 0;
+
+    if (state.timerType === 'countdown') {
+      state.timeRemaining = val * 60;
+    } else {
+      state.timeRemaining = 0;
+    }
+
+    updateTimerUI();
+    updateCustomDurUI();
+    saveAll();
+    showToast(`✅ 自定义时长已生效：${val} 分钟`);
+  }
+
+  function clearCustomDuration() {
+    state.customDuration = null;
+    state.sessionElapsed = 0;
+    state.lastQuoteMinute = 0;
+
+    if (state.timerType === 'countdown') {
+      state.timeRemaining = getEffectiveDuration() * 60;
+    } else {
+      state.timeRemaining = 0;
+    }
+
+    updateTimerUI();
+    updateCustomDurUI();
+    saveAll();
+  }
+
+  function completeTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    state.isRunning = false;
+
+    if (state.timerType === 'countdown') {
+      state.timeRemaining = 0;
+    }
+    // For countdown, sessionElapsed = total duration
+    updateTimerUI();
+
+    playSound();
+
+    if (state.mode === 'focus') {
+      const durationMinutes = state.timerType === 'countdown'
+        ? getEffectiveDuration()
+        : Math.floor(state.timeRemaining / 60);
+
+      // Record completed focus session
+      state.focusCount++;
+      dailyStats.focusCount++;
+      dailyStats.totalFocusMinutes += durationMinutes;
+
+      const record = {
+        id: Date.now(),
+        taskName: state.taskName || '未命名任务',
+        duration: durationMinutes,
+        completedAt: new Date().toISOString(),
+      };
+      history.unshift(record);
+      if (history.length > 200) history.length = 200;
+
+      const nextMode = state.focusCount >= 2 ? 'longBreak' : 'shortBreak';
+      const breakLabel = nextMode === 'longBreak' ? '长休息' : '短休息';
+      notify('专注完成！', `已完成 ${state.focusCount} 轮专注，进入${breakLabel}`);
+      showToast(`✅ 专注完成！进入${breakLabel}（${state.focusCount}/2 轮）`);
+
+      state.taskName = '';
+      state.customDuration = null;
+      state.mode = nextMode;
+      state.sessionElapsed = 0;
+      state.lastQuoteMinute = 0;
+      state.timerType = 'countdown';
+      state.timeRemaining = getEffectiveDuration() * 60;
+
+      saveAll();
+      updateAll();
+
+      if (settings.autoNext) {
+        setTimeout(() => {
+          if (!state.isRunning) startTimer();
+        }, 800);
+      }
+    } else {
+      const isLongBreak = state.mode === 'longBreak';
+      notify('休息结束！', '准备开始下一轮专注');
+      showToast(isLongBreak ? '🌿 长休息结束，新一轮循环开始！' : '☕ 短休息结束，开始专注！');
+
+      if (isLongBreak) state.focusCount = 0;
+
+      state.customDuration = null;
+      state.mode = 'focus';
+      state.sessionElapsed = 0;
+      state.lastQuoteMinute = 0;
+      state.timerType = 'countdown';
+      state.timeRemaining = getEffectiveDuration() * 60;
+
+      saveAll();
+      updateAll();
+
+      if (settings.autoNext) {
+        setTimeout(() => {
+          if (!state.isRunning) startTimer();
+        }, 800);
+      }
+    }
+  }
+
+  // ── UI Updates ──
+  function updateTimerUI() {
+    const displaySeconds = state.timerType === 'countdown' ? state.timeRemaining : state.timeRemaining;
+    timerDisplay.textContent = formatTime(displaySeconds);
+
+    const typeStr = state.timerType === 'countdown' ? '倒计时' : '正计时';
+    timerLabel.textContent = `${getModeLabel(state.mode)} · ${typeStr}`;
+
+    // Progress circle
+    timerCircle.classList.remove('countup');
+    if (state.timerType === 'countdown') {
+      const total = getEffectiveDuration() * 60;
+      const fraction = total > 0 ? state.timeRemaining / total : 0;
+      const offset = CIRCUMFERENCE * (1 - fraction);
+      timerCircle.style.strokeDashoffset = offset;
+      timerCircle.style.stroke = getModeColor(state.mode);
+    } else {
+      // Countup: full circle with pulse
+      timerCircle.style.strokeDashoffset = 0;
+      timerCircle.style.stroke = 'var(--short)';
+      timerCircle.classList.add('countup');
+    }
+
+    // Timer type badge
+    timerTypeBadge.textContent = state.timerType === 'countdown' ? '⬇ 倒计时' : '⬆ 正计时';
+
+    // Timer display color
+    timerDisplay.classList.toggle('countup', state.timerType === 'countup');
+
+    document.title = `${formatTime(displaySeconds)} - ${getModeLabel(state.mode)} | 番茄钟`;
+  }
+
+  function updateControlButtons() {
+    if (state.isRunning) {
+      btnStart.textContent = '⏸ 暂停';
+      btnStart.classList.add('running');
+      btnStart.classList.toggle('countup-running', state.timerType === 'countup');
+    } else {
+      btnStart.textContent = '▶ 开始';
+      btnStart.classList.remove('running', 'countup-running');
+    }
+  }
+
+  function updateTimerTypeUI() {
+    timerTypeToggle.querySelectorAll('.timer-type-btn').forEach(btn => {
+      btn.classList.remove('active', 'countup-active');
+      if (btn.dataset.type === state.timerType) btn.classList.add('active');
+      if (btn.dataset.type === 'countup') btn.classList.add('countup-active');
+      btn.disabled = state.isRunning;
+      btn.style.opacity = state.isRunning ? '0.5' : '1';
+      btn.style.cursor = state.isRunning ? 'not-allowed' : 'pointer';
+    });
+  }
+
+  function updateModeTabs() {
+    modeTabs.querySelectorAll('.mode-tab').forEach(tab => {
+      const mode = tab.dataset.mode;
+      tab.classList.remove('active', 'focus', 'short', 'long');
+      if (mode === state.mode) tab.classList.add('active');
+      if (mode === 'focus') tab.classList.add('focus');
+      if (mode === 'shortBreak') tab.classList.add('short');
+      if (mode === 'longBreak') tab.classList.add('long');
+      tab.disabled = state.isRunning;
+      tab.style.opacity = state.isRunning ? '0.5' : '1';
+      tab.style.cursor = state.isRunning ? 'not-allowed' : 'pointer';
+    });
+  }
+
+  function updateCustomDurUI() {
+    const disabled = state.isRunning;
+    customDurInput.disabled = disabled;
+    btnCustomDurApply.disabled = disabled;
+    customDurInput.style.opacity = disabled ? '0.5' : '1';
+    btnCustomDurApply.style.opacity = disabled ? '0.5' : '1';
+
+    if (state.customDuration !== null) {
+      customDurInput.value = state.customDuration;
+      customDurBadge.classList.remove('hidden');
+      btnCustomDurApply.textContent = '清除';
+      btnCustomDurApply.classList.add('applied');
+    } else {
+      customDurInput.value = '';
+      customDurBadge.classList.add('hidden');
+      btnCustomDurApply.textContent = '应用';
+      btnCustomDurApply.classList.remove('applied');
+    }
+  }
+
+  function updateTaskUI() {
+    if (state.taskName) {
+      taskBadge.classList.remove('hidden');
+      taskBadgeName.textContent = state.taskName;
+      btnBindTask.textContent = '解绑';
+      btnBindTask.classList.add('bound');
+      taskInput.value = state.taskName;
+    } else {
+      taskBadge.classList.add('hidden');
+      taskBadgeName.textContent = '';
+      btnBindTask.textContent = '绑定';
+      btnBindTask.classList.remove('bound');
+      taskInput.value = '';
+    }
+  }
+
+  function updateStatsUI() {
+    statFocusCount.textContent = dailyStats.focusCount;
+    statFocusTime.innerHTML = `${dailyStats.totalFocusMinutes}<span style="font-size:0.9rem;"> 分钟</span>`;
+    statCycle.textContent = `${state.focusCount}/2`;
+  }
+
+  function updateSummaryUI() {
+    const weekly = computeWeeklyStats();
+    sumTodayTime.innerHTML = `${dailyStats.totalFocusMinutes}<span style="font-size:0.9rem;"> 分钟</span>`;
+    sumTodayCount.textContent = `${dailyStats.focusCount} 轮`;
+    sumWeekTime.innerHTML = `${weekly.minutes}<span style="font-size:0.9rem;"> 分钟</span>`;
+    sumWeekCount.textContent = `${weekly.count} 轮`;
+  }
+
+  function updateSettingsUI() {
+    focusDurationInput.value = settings.focusDuration;
+    shortBreakDurationInput.value = settings.shortBreakDuration;
+    longBreakDurationInput.value = settings.longBreakDuration;
+    toggleAutoNext.classList.toggle('on', settings.autoNext);
+    toggleSound.classList.toggle('on', settings.sound);
+    toggleNotification.classList.toggle('on', settings.desktopNotification);
+  }
+
+  function updateHistoryUI() {
+    if (history.length === 0) {
+      historyList.innerHTML = '<div class="history-empty">暂无记录，完成一轮专注后自动生成</div>';
+      btnClearAll.classList.add('hidden');
+    } else {
+      btnClearAll.classList.remove('hidden');
+      historyList.innerHTML = history.map(h => {
+        const time = new Date(h.completedAt);
+        const dateStr = `${time.getFullYear()}-${String(time.getMonth()+1).padStart(2,'0')}-${String(time.getDate()).padStart(2,'0')} ${String(time.getHours()).padStart(2,'0')}:${String(time.getMinutes()).padStart(2,'0')}`;
+        return `
+          <div class="history-item">
+            <div class="history-info">
+              <div class="history-task">📌 ${escapeHTML(h.taskName)}</div>
+              <div class="history-meta">${h.duration} 分钟 · ${dateStr}</div>
+            </div>
+            <button class="history-delete" data-id="${h.id}" title="删除">×</button>
+          </div>`;
+      }).join('');
+    }
+  }
+
+  function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function applyDarkMode() {
+    document.body.classList.toggle('dark', settings.darkMode);
+    btnDarkMode.textContent = settings.darkMode ? '☀️' : '🌓';
+  }
+
+  function updateAll() {
+    updateTimerUI();
+    updateControlButtons();
+    updateTimerTypeUI();
+    updateModeTabs();
+    updateCustomDurUI();
+    updateTaskUI();
+    updateStatsUI();
+    updateSummaryUI();
+    updateHistoryUI();
+    updateSettingsUI();
+    applyDarkMode();
+  }
+
+  // ── Event Handlers ──
+  btnStart.addEventListener('click', () => {
+    if (state.isRunning) { pauseTimer(); } else { startTimer(); }
+    saveAll();
+  });
+
+  btnReset.addEventListener('click', () => {
+    resetTimer();
+    saveAll();
+  });
+
+  // Timer type toggle
+  timerTypeToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('.timer-type-btn');
+    if (!btn || state.isRunning) return;
+    switchTimerType(btn.dataset.type);
+  });
+
+  // Custom duration
+  btnCustomDurApply.addEventListener('click', () => {
+    if (state.customDuration !== null) {
+      clearCustomDuration();
+    } else {
+      applyCustomDuration();
+    }
+  });
+
+  customDurInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      if (state.customDuration !== null) {
+        clearCustomDuration();
+      } else {
+        applyCustomDuration();
+      }
+    }
+  });
+
+  // Mode tabs
+  modeTabs.addEventListener('click', (e) => {
+    const tab = e.target.closest('.mode-tab');
+    if (!tab || state.isRunning) return;
+    switchMode(tab.dataset.mode);
+  });
+
+  // Task binding
+  btnBindTask.addEventListener('click', () => {
+    if (state.taskName) {
+      state.taskName = '';
+    } else {
+      const name = taskInput.value.trim();
+      if (!name) { showToast('请输入任务名称'); return; }
+      state.taskName = name;
+    }
+    updateTaskUI();
+    saveAll();
+  });
+
+  taskInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const name = taskInput.value.trim();
+      if (name) {
+        state.taskName = name;
+        updateTaskUI();
+        saveAll();
+      }
+    }
+  });
+
+  // Settings changes
+  function onDurationChange(input, key, min, max) {
+    input.addEventListener('change', () => {
+      let val = parseInt(input.value, 10);
+      if (isNaN(val) || val < min) val = min;
+      if (val > max) val = max;
+      input.value = val;
+      settings[key] = val;
+      if (!state.isRunning && state.customDuration === null &&
+          state.mode === (key === 'focusDuration' ? 'focus' : key === 'shortBreakDuration' ? 'shortBreak' : 'longBreak')) {
+        state.timeRemaining = val * 60;
+        updateTimerUI();
+      }
+      saveAll();
+    });
+  }
+
+  onDurationChange(focusDurationInput, 'focusDuration', 5, 60);
+  onDurationChange(shortBreakDurationInput, 'shortBreakDuration', 1, 15);
+  onDurationChange(longBreakDurationInput, 'longBreakDuration', 5, 30);
+
+  toggleAutoNext.addEventListener('click', () => {
+    settings.autoNext = !settings.autoNext;
+    toggleAutoNext.classList.toggle('on', settings.autoNext);
+    saveAll();
+  });
+
+  toggleSound.addEventListener('click', () => {
+    settings.sound = !settings.sound;
+    toggleSound.classList.toggle('on', settings.sound);
+    saveAll();
+  });
+
+  toggleNotification.addEventListener('click', () => {
+    settings.desktopNotification = !settings.desktopNotification;
+    toggleNotification.classList.toggle('on', settings.desktopNotification);
+    if (settings.desktopNotification && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    saveAll();
+  });
+
+  btnDarkMode.addEventListener('click', () => {
+    settings.darkMode = !settings.darkMode;
+    applyDarkMode();
+    saveAll();
+  });
+
+  // Collapsible sections
+  $('settingsHeader').addEventListener('click', () => {
+    $('settingsBody').classList.toggle('hidden');
+    $('settingsToggle').classList.toggle('open');
+  });
+
+  $('historyHeader').addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    $('historyBody').classList.toggle('hidden');
+    $('historyToggle').classList.toggle('open');
+  });
+
+  // History delete (event delegation)
+  historyList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.history-delete');
+    if (!btn) return;
+    const id = parseInt(btn.dataset.id, 10);
+    history = history.filter(h => h.id !== id);
+    updateHistoryUI();
+    saveAll();
+  });
+
+  btnClearAll.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (confirm('确定要清空全部历史记录吗？此操作不可恢复。')) {
+      history = [];
+      updateHistoryUI();
+      saveAll();
+    }
+  });
+
+  btnClearStats.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (confirm('确定要清空当日统计数据吗？（不会影响历史记录）')) {
+      dailyStats.focusCount = 0;
+      dailyStats.totalFocusMinutes = 0;
+      updateStatsUI();
+      updateSummaryUI();
+      saveAll();
+    }
+  });
+
+  // ── Keyboard Shortcuts ──
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+    switch (e.code) {
+      case 'Space':
+        e.preventDefault();
+        if (state.isRunning) { pauseTimer(); } else { startTimer(); }
+        saveAll();
+        break;
+      case 'KeyR':
+        e.preventDefault();
+        resetTimer();
+        saveAll();
+        break;
+      case 'Digit1':
+        e.preventDefault();
+        if (!state.isRunning) switchMode('focus');
+        break;
+      case 'Digit2':
+        e.preventDefault();
+        if (!state.isRunning) switchMode('shortBreak');
+        break;
+      case 'Digit3':
+        e.preventDefault();
+        if (!state.isRunning) switchMode('longBreak');
+        break;
+    }
+  });
+
+  // ── Midnight reset check ──
+  function checkMidnightReset() {
+    const today = getToday();
+    if (dailyStats.date !== today) {
+      dailyStats = { date: today, focusCount: 0, totalFocusMinutes: 0 };
+      updateStatsUI();
+      updateSummaryUI();
+      saveAll();
+    }
+    const now = new Date();
+    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+    setTimeout(checkMidnightReset, msUntilMidnight + 1000);
+  }
+
+  // ── Init ──
+  function init() {
+    loadAll();
+    if (!state.isRunning && state.timerType === 'countdown') {
+      state.timeRemaining = getEffectiveDuration() * 60;
+    }
+    updateAll();
+    checkMidnightReset();
+
+    if (settings.desktopNotification && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
